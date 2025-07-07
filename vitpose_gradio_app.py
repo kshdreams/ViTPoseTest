@@ -20,6 +20,71 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 # 로그 저장용 전역 변수
 log_messages = []
 
+# COCO 17개 키포인트 + 추가 12개 키포인트 정의
+COCO_17_KEYPOINTS = [
+    "Nose", "L_Eye", "R_Eye", "L_Ear", "R_Ear",
+    "L_Shoulder", "R_Shoulder", "L_Elbow", "R_Elbow",
+    "L_Wrist", "R_Wrist", "L_Hip", "R_Hip",
+    "L_Knee", "R_Knee", "L_Ankle", "R_Ankle"
+]
+
+ADDITIONAL_KEYPOINTS = [
+    "r_big_toe", "l_big_toe", "l_calc", "r_calc"
+]
+
+# 전체 29개 키포인트 목록
+SELECTED_KEYPOINTS = COCO_17_KEYPOINTS + ADDITIONAL_KEYPOINTS
+
+# 키포인트 이름별 색상 매핑
+KEYPOINT_COLOR_MAP = {
+    # 얼굴(분홍)
+    "Nose": (255,192,203), "L_Eye": (255,192,203), "R_Eye": (255,192,203), "L_Ear": (255,192,203), "R_Ear": (255,192,203),
+    # 왼쪽 상체/하체(파랑)
+    "L_Shoulder": (0,0,255), "L_Elbow": (0,0,255), "L_Wrist": (0,0,255), "L_Hip": (0,0,255),
+    "L_Knee": (0,0,255), "L_Ankle": (0,0,255), "l_toe": (0,0,255), "l_big_toe": (0,0,255), "l_calc": (0,0,255),
+    # 오른쪽 상체/하체(노랑)
+    "R_Shoulder": (255,255,0), "R_Elbow": (255,255,0), "R_Wrist": (255,255,0),
+    "R_Hip": (255,255,0),
+    "R_Knee": (255,255,0), "R_Ankle": (255,255,0), "r_toe": (255,255,0), "r_big_toe": (255,255,0), "r_calc": (255,255,0),
+}
+
+# 이름 기반 엣지 정의
+KEYPOINT_EDGES = [
+    ("Nose", "L_Eye"), ("Nose", "R_Eye"), ("L_Eye", "L_Ear"), ("R_Eye", "R_Ear"),  # 머리
+    ("L_Shoulder", "R_Shoulder"), ("L_Shoulder", "L_Elbow"), ("L_Elbow", "L_Wrist"),
+    ("R_Shoulder", "R_Elbow"), ("R_Elbow", "R_Wrist"),
+    ("L_Shoulder", "L_Hip"), ("R_Shoulder", "R_Hip"), ("L_Hip", "R_Hip"),
+    ("L_Hip", "L_Knee"), ("L_Knee", "L_Ankle"),
+    ("R_Hip", "R_Knee"), ("R_Knee", "R_Ankle"),
+    {"r_big_toe", "R_Ankle"}, {"r_calc", "R_Ankle"},
+    {"l_big_toe", "L_Ankle"}, {"l_calc", "L_Ankle"},
+    # 필요하면 추가 키포인트 엣지도 여기에 추가
+]
+
+def filter_keypoints(pose_results, selected_keypoints):
+    if pose_model is None:
+        return pose_results
+    filtered_results = []
+    for pose_result in pose_results:
+        filtered_keypoints = []
+        for i, (keypoint, label, score) in enumerate(zip(
+            pose_result["keypoints"], 
+            pose_result["labels"], 
+            pose_result["scores"]
+        )):
+            keypoint_name = pose_model.config.id2label[label.item()] if pose_model else f"keypoint_{i}"
+            if keypoint_name in selected_keypoints:
+                filtered_keypoints.append({
+                    "name": keypoint_name,
+                    "coord": keypoint,
+                    "score": score
+                })
+        if filtered_keypoints:
+            filtered_results.append({
+                "keypoints": filtered_keypoints
+            })
+    return filtered_results
+
 def add_log(message):
     """로그 메시지를 추가하고 콘솔에도 출력"""
     import datetime
@@ -49,7 +114,7 @@ pose_model = None
 
 def load_model(model_name):
     """지정된 모델을 로드하는 함수"""
-    global person_image_processor, person_model, image_processor, pose_model
+    global person_image_processor, person_model, image_processor, pose_model, SELECTED_KEYPOINTS
     
     print(f"모델 로딩 중: {model_name}")
     add_log(f"모델 로딩 중: {model_name}")
@@ -66,6 +131,19 @@ def load_model(model_name):
         
         print(f"모델 로딩 완료: {model_name}")
         add_log(f"모델 로딩 완료: {model_name}")
+        
+        # id2label.values()에서 원하는 키포인트만 뽑아서 SELECTED_KEYPOINTS 동적 할당
+        id2label_names = list(pose_model.config.id2label.values())
+        # 원하는 이름만 골라서 아래 리스트에 추가 (실제 id2label에 있는 이름만!)
+        wanted = [
+            "Nose", "L_Eye", "R_Eye", "L_Ear", "R_Ear",
+            "L_Shoulder", "R_Shoulder", "L_Elbow", "R_Elbow",
+            "L_Wrist", "R_Wrist", "L_Hip", "R_Hip",
+            "L_Knee", "R_Knee", "L_Ankle", "R_Ankle",
+            "l_big_toe", "r_big_toe", "l_calc", "r_calc"
+        ]
+        SELECTED_KEYPOINTS = [name for name in id2label_names if name in wanted]
+        print("SELECTED_KEYPOINTS:", SELECTED_KEYPOINTS)
         
     except Exception as e:
         print(f"모델 로딩 실패: {e}")
@@ -138,159 +216,55 @@ def extract_pose(image, person_boxes):
         outputs = pose_model(**inputs)
     
     pose_results = image_processor.post_process_pose_estimation(outputs, boxes=[person_boxes], threshold=0.3)
-    return pose_results[0]  # 첫 번째 이미지의 결과
+    
+    # 선택된 키포인트만 필터링
+    filtered_results = filter_keypoints(pose_results[0], SELECTED_KEYPOINTS)
+    
+    add_log(f"키포인트 필터링: {len(pose_results[0])}개 → {len(filtered_results)}개")
+    
+    return filtered_results
 
 import math
 
-def draw_points(image, keypoints, scores, pose_keypoint_color, keypoint_score_threshold, radius, show_keypoint_weight):
-    if pose_keypoint_color is not None:
-        # 색상 배열이 키포인트보다 짧으면 반복해서 사용
-        if len(pose_keypoint_color) < len(keypoints):
-            # 색상 배열을 키포인트 개수만큼 반복
-            repeat_times = (len(keypoints) // len(pose_keypoint_color)) + 1
-            pose_keypoint_color = np.tile(pose_keypoint_color, (repeat_times, 1))[:len(keypoints)]
-    
-    for kid, (kpt, kpt_score) in enumerate(zip(keypoints, scores)):
-        x_coord, y_coord = int(kpt[0]), int(kpt[1])
+def draw_points(image, keypoints, keypoint_score_threshold, radius, show_keypoint_weight):
+    for kp in keypoints:
+        name = kp["name"]
+        x_coord, y_coord = int(kp["coord"][0]), int(kp["coord"][1])
+        kpt_score = kp["score"]
         if kpt_score > keypoint_score_threshold:
-            if pose_keypoint_color is not None and kid < len(pose_keypoint_color):
-                color = tuple(int(c) for c in pose_keypoint_color[kid])
-            else:
-                # 기본 색상 사용
-                color = (0, 255, 0)  # 녹색
-            
+            color = KEYPOINT_COLOR_MAP.get(name, (255,255,255))
             if show_keypoint_weight:
-                cv2.circle(image, (int(x_coord), int(y_coord)), radius, color, -1)
+                cv2.circle(image, (x_coord, y_coord), radius, color, -1)
                 transparency = max(0, min(1, kpt_score))
                 cv2.addWeighted(image, transparency, image, 1 - transparency, 0, dst=image)
             else:
-                cv2.circle(image, (int(x_coord), int(y_coord)), radius, color, -1)
+                cv2.circle(image, (x_coord, y_coord), radius, color, -1)
 
-def draw_links(image, keypoints, scores, keypoint_edges, link_colors, keypoint_score_threshold, thickness, show_keypoint_weight, stick_width=2):
-    height, width, _ = image.shape
-    if keypoint_edges is not None and link_colors is not None:
-        # 링크 색상 배열이 엣지보다 짧으면 반복해서 사용
-        if len(link_colors) < len(keypoint_edges):
-            repeat_times = (len(keypoint_edges) // len(link_colors)) + 1
-            link_colors = np.tile(link_colors, (repeat_times, 1))[:len(keypoint_edges)]
-        
-        for sk_id, sk in enumerate(keypoint_edges):
-            # 인덱스 범위 체크
-            if sk[0] >= len(keypoints) or sk[1] >= len(keypoints):
-                continue
-                
-            x1, y1, score1 = (int(keypoints[sk[0], 0]), int(keypoints[sk[0], 1]), scores[sk[0]])
-            x2, y2, score2 = (int(keypoints[sk[1], 0]), int(keypoints[sk[1], 1]), scores[sk[1]])
-            if (
-                x1 > 0
-                and x1 < width
-                and y1 > 0
-                and y1 < height
-                and x2 > 0
-                and x2 < width
-                and y2 > 0
-                and y2 < height
-                and score1 > keypoint_score_threshold
-                and score2 > keypoint_score_threshold
-            ):
-                if sk_id < len(link_colors):
-                    color = tuple(int(c) for c in link_colors[sk_id])
-                else:
-                    color = (255, 0, 0)  # 기본 빨간색
-                    
-                if show_keypoint_weight:
-                    X = (x1, x2)
-                    Y = (y1, y2)
-                    mean_x = np.mean(X)
-                    mean_y = np.mean(Y)
-                    length = ((Y[0] - Y[1]) ** 2 + (X[0] - X[1]) ** 2) ** 0.5
-                    angle = math.degrees(math.atan2(Y[0] - Y[1], X[0] - X[1]))
-                    polygon = cv2.ellipse2Poly(
-                        (int(mean_x), int(mean_y)), (int(length / 2), int(stick_width)), int(angle), 0, 360, 1
-                    )
-                    cv2.fillConvexPoly(image, polygon, color)
-                    transparency = max(0, min(1, 0.5 * (keypoints[sk[0], 2] + keypoints[sk[1], 2])))
-                    cv2.addWeighted(image, transparency, image, 1 - transparency, 0, dst=image)
-                else:
-                    cv2.line(image, (x1, y1), (x2, y2), color, thickness=thickness)
+def draw_links(image, keypoints, keypoint_edges, keypoint_score_threshold, thickness, show_keypoint_weight, stick_width=2):
+    name_to_idx = {kp["name"]: idx for idx, kp in enumerate(keypoints)}
+    for n1, n2 in keypoint_edges:
+        if n1 not in name_to_idx or n2 not in name_to_idx:
+            print(f"skip edge ({n1}, {n2}) (name not found)")
+            continue
+        idx1, idx2 = name_to_idx[n1], name_to_idx[n2]
+        kp1, kp2 = keypoints[idx1], keypoints[idx2]
+        x1, y1, score1 = int(kp1["coord"][0]), int(kp1["coord"][1]), kp1["score"]
+        x2, y2, score2 = int(kp2["coord"][0]), int(kp2["coord"][1]), kp2["score"]
+        if (
+            x1 > 0 and x1 < image.shape[1] and y1 > 0 and y1 < image.shape[0] and
+            x2 > 0 and x2 < image.shape[1] and y2 > 0 and y2 < image.shape[0] and
+            score1 > keypoint_score_threshold and score2 > keypoint_score_threshold
+        ):
+            color = KEYPOINT_COLOR_MAP.get(n1, (255,255,255))
+            cv2.line(image, (x1, y1), (x2, y2), color, thickness=thickness)
 
 def draw_keypoints_on_image(image, pose_results, person_boxes=None, input_boxes=None):
-    """이미지에 키포인트와 사람 검출 박스를 그리는 함수 (Whole Body - 133개 키포인트)"""
     numpy_image = np.array(image)
-        
-    keypoint_edges = pose_model.config.edges
-    
-    palette = np.array(
-        [
-            [255, 128, 0],
-            [255, 153, 51],
-            [255, 178, 102],
-            [230, 230, 0],
-            [255, 153, 255],
-            [153, 204, 255],
-            [255, 102, 255],
-            [255, 51, 255],
-            [102, 178, 255],
-            [51, 153, 255],
-            [255, 153, 153],
-            [255, 102, 102],
-            [255, 51, 51],
-            [153, 255, 153],
-            [102, 255, 102],
-            [51, 255, 51],
-            [0, 255, 0],
-            [0, 0, 255],
-            [255, 0, 0],
-            [255, 255, 255],
-        ]
-    )
-
-    link_colors = palette[[0, 0, 0, 0, 7, 7, 7, 9, 9, 9, 9, 9, 16, 16, 16, 16, 16, 16, 16]]
-    keypoint_colors = palette[[16, 16, 16, 16, 16, 9, 9, 9, 9, 9, 9, 0, 0, 0, 0, 0, 0]+[4]*(52-17)]
-
-    # 사람 검출 박스 그리기 (빨간색)
-    if person_boxes is not None and len(person_boxes) > 0:
-        for i, box in enumerate(person_boxes):
-            x, y, w, h = box
-            # 박스 그리기 (빨간색, 두께 2)
-            cv2.rectangle(numpy_image, (int(x), int(y)), (int(x + w), int(y + h)), (0, 0, 255), 2)
-            # 박스 번호 표시
-            cv2.putText(numpy_image, f"Person {i+1}", (int(x), int(y)-10), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-    
-    # 모델 입력 박스 그리기 (파란색, 점선)
-    if input_boxes is not None and len(input_boxes) > 0:
-        for i, box in enumerate(input_boxes):
-            x, y, w, h = box
-            # 점선 박스 그리기 (파란색, 두께 1)
-            # 점선 효과를 위해 짧은 선들을 그어서 점선처럼 보이게 함
-            for j in range(0, int(w), 10):
-                # 위쪽 선
-                cv2.line(numpy_image, (int(x + j), int(y)), (int(x + min(j + 5, w)), int(y)), (255, 0, 0), 1)
-                # 아래쪽 선
-                cv2.line(numpy_image, (int(x + j), int(y + h)), (int(x + min(j + 5, w)), int(y + h)), (255, 0, 0), 1)
-            for j in range(0, int(h), 10):
-                # 왼쪽 선
-                cv2.line(numpy_image, (int(x), int(y + j)), (int(x), int(y + min(j + 5, h))), (255, 0, 0), 1)
-                # 오른쪽 선
-                cv2.line(numpy_image, (int(x + w), int(y + j)), (int(x + w), int(y + min(j + 5, h))), (255, 0, 0), 1)
-            
-            # 입력 박스 라벨 표시
-            cv2.putText(numpy_image, f"Input {i+1}", (int(x), int(y + h + 20)), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 1)
-
     for pose_result in pose_results:
-        scores = np.array(pose_result["scores"])
-        keypoints = np.array(pose_result["keypoints"])
-        
-        # 키포인트 그리기 (참고 코드와 동일한 방식)
-        draw_points(numpy_image, keypoints, scores, keypoint_colors, 
-                   keypoint_score_threshold=0.3, radius=2, show_keypoint_weight=False)
-        
-        # 링크 그리기 (참고 코드와 동일한 방식)
-        draw_links(numpy_image, keypoints, scores, keypoint_edges, link_colors, 
-                  keypoint_score_threshold=0.3, thickness=1, show_keypoint_weight=False)
-    
+        keypoints = pose_result["keypoints"]
+        # name 기반 엣지
+        draw_points(numpy_image, keypoints, keypoint_score_threshold=0.3, radius=2, show_keypoint_weight=False)
+        draw_links(numpy_image, keypoints, KEYPOINT_EDGES, keypoint_score_threshold=0.3, thickness=1, show_keypoint_weight=False)
     return numpy_image
 
 def process_video(video_file, frame_interval=1, progress=None):
@@ -298,6 +272,9 @@ def process_video(video_file, frame_interval=1, progress=None):
     try:
         add_log(f"비디오 파일 열기 시도: {video_file}")
         cap = cv2.VideoCapture(video_file)
+        
+        # 프로그레스 중복 호출 방지를 위한 변수
+        last_progress_update = 0
         
         if not cap.isOpened():
             raise ValueError(f"비디오 파일을 열 수 없습니다: {video_file}")
@@ -327,23 +304,20 @@ def process_video(video_file, frame_interval=1, progress=None):
             
             timestamp = frame_idx / fps
             
-            # 프로그레스 업데이트
-            if progress is not None:
-                progress_percent = (frame_idx / total_frames)
+            # 프로그레스 업데이트 (0.0 ~ 1.0 범위로 제한, 중복 호출 방지)
+            if progress is not None and frame_idx - last_progress_update >= 10:  # 10프레임마다만 업데이트
+                progress_percent = min(1.0, frame_idx / total_frames)
                 progress(progress_percent, desc=f"프레임 {frame_idx}/{total_frames} 처리 중...")
+                last_progress_update = frame_idx
             
             # 프로그레스를 콘솔에 출력
             if frame_idx % 100 == 0:  # 100프레임마다 출력
-                progress_percent = (frame_idx / total_frames) * 100
-                add_log(f"프레임 {frame_idx}/{total_frames} 처리 중... ({progress_percent:.1f}%)")
+                console_progress = min(100.0, (frame_idx / total_frames) * 100)
+                add_log(f"프레임 {frame_idx}/{total_frames} 처리 중... ({console_progress:.1f}%)")
             
             if frame_idx % frame_interval == 0:
                 try:
                     add_log(f"프레임 {frame_idx} 처리 시작")
-                    
-                    # 프로그레스 업데이트 - 프레임 처리 시작
-                    if progress is not None:
-                        progress(progress_percent, desc=f"프레임 {frame_idx} 처리 중...")
                     
                     # OpenCV BGR을 PIL RGB로 변환
                     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -436,22 +410,16 @@ def process_video(video_file, frame_interval=1, progress=None):
                             "person_id": person_idx,
                             "keypoints": []
                         }
-                        
-                        for i, (keypoint, label, score) in enumerate(zip(
-                            person_pose["keypoints"], 
-                            person_pose["labels"], 
-                            person_pose["scores"]
-                        )):
-                            keypoint_name = pose_model.config.id2label[label.item()] if pose_model else f"keypoint_{i}"
-                            x, y = keypoint
+                        for kp in person_pose["keypoints"]:
+                            keypoint_name = kp["name"]
+                            x, y = kp["coord"]
+                            score = kp["score"]
                             person_data["keypoints"].append({
-                                "id": i,
                                 "name": keypoint_name,
                                 "x": float(x),
                                 "y": float(y),
                                 "confidence": float(score)
                             })
-                        
                         frame_data["persons"].append(person_data)
                     
                     poses_data.append(frame_data)
@@ -472,7 +440,7 @@ def process_video(video_file, frame_interval=1, progress=None):
             frame_idx += 1
         
         cap.release()
-        add_log(f"비디오 처리 완료. 총 {processed_frames}개 프레임 처리됨")
+        add_log(f"비디오 처리 완료. 총 {processed_frames}개 프레임 처리됨 (필터링된 키포인트: {len(SELECTED_KEYPOINTS)}개)")
         
         return thumbnails, poses_data
         
@@ -535,6 +503,9 @@ def create_skeleton_video(video_path, poses_data, fps, frame_interval=5, progres
         
         # 원본 비디오 열기
         cap = cv2.VideoCapture(video_path)
+        
+        # 프로그레스 중복 호출 방지를 위한 변수
+        last_progress_update = 0
         if not cap.isOpened():
             raise ValueError(f"비디오 파일을 열 수 없습니다: {video_path}")
         
@@ -561,10 +532,11 @@ def create_skeleton_video(video_path, poses_data, fps, frame_interval=5, progres
             if not ret:
                 break
             
-            # 프로그레스 업데이트
-            if progress is not None:
-                progress_percent = frame_idx / total_frames
+            # 프로그레스 업데이트 (0.0 ~ 1.0 범위로 제한, 중복 호출 방지)
+            if progress is not None and frame_idx - last_progress_update >= 10:  # 10프레임마다만 업데이트
+                progress_percent = min(1.0, frame_idx / total_frames)
                 progress(progress_percent, desc=f"스켈레톤 비디오 생성 중... {frame_idx}/{total_frames}")
+                last_progress_update = frame_idx
             
             # frame_interval에 맞는 프레임만 처리
             if frame_idx % frame_interval == 0:
@@ -578,23 +550,21 @@ def create_skeleton_video(video_path, poses_data, fps, frame_interval=5, progres
                     if data_idx < len(poses_data):
                         frame_pose_data = poses_data[data_idx]
                         
-                        # 포즈 데이터를 draw_keypoints_on_image 형식으로 변환
+                        # 포즈 데이터를 draw_keypoints_on_image 형식으로 변환 (필터링된 키포인트)
                         pose_results = []
                         for person in frame_pose_data["persons"]:
                             keypoints = []
-                            labels = []
-                            scores = []
-                            
                             for kp in person["keypoints"]:
-                                keypoints.append([kp["x"], kp["y"]])
-                                labels.append(kp["id"])
-                                scores.append(kp["confidence"])
-                            
-                            pose_results.append({
-                                "keypoints": np.array(keypoints),
-                                "labels": np.array(labels),
-                                "scores": np.array(scores)
-                            })
+                                if kp["name"] in SELECTED_KEYPOINTS:
+                                    keypoints.append({
+                                        "name": kp["name"],
+                                        "coord": [kp["x"], kp["y"]],
+                                        "score": kp["confidence"]
+                                    })
+                            if keypoints:
+                                pose_results.append({
+                                    "keypoints": keypoints
+                                })
                         
                         # 스켈레톤이 그려진 이미지 생성
                         skeleton_image = draw_keypoints_on_image(pil_image, pose_results)
@@ -689,12 +659,12 @@ def run_pose_extraction(video, model_name=None, frame_interval=5, progress=None)
         
         for frame_data in poses_data:
             for person in frame_data["persons"]:
-                for kp in person["keypoints"]:
+                for idx, kp in enumerate(person["keypoints"]):
                     csv_rows.append({
                         "timestamp": frame_data["timestamp"],
                         "frame_idx": frame_data["frame_idx"],
                         "person_id": person["person_id"],
-                        "keypoint_id": kp["id"],
+                        "keypoint_id": idx,
                         "keypoint_name": kp["name"],
                         "x": kp["x"],
                         "y": kp["y"],
@@ -710,10 +680,10 @@ def run_pose_extraction(video, model_name=None, frame_interval=5, progress=None)
         
         if skeleton_video_path:
             add_log(f"스켈레톤 비디오 생성 완료: {skeleton_video_path}")
-            return preview_image, json_path, csv_path, skeleton_video_path, duration, f"처리 완료! 총 {len(thumbnails)}개 프레임 처리됨 (FPS: {fps:.1f})"
+            return preview_image, json_path, csv_path, skeleton_video_path, duration, f"처리 완료! 총 {len(thumbnails)}개 프레임 처리됨 (FPS: {fps:.1f}, 키포인트: {len(SELECTED_KEYPOINTS)}개)"
         else:
             add_log("스켈레톤 비디오 생성 실패")
-            return preview_image, json_path, csv_path, None, duration, f"처리 완료! 총 {len(thumbnails)}개 프레임 처리됨 (FPS: {fps:.1f})"
+            return preview_image, json_path, csv_path, None, duration, f"처리 완료! 총 {len(thumbnails)}개 프레임 처리됨 (FPS: {fps:.1f}, 키포인트: {len(SELECTED_KEYPOINTS)}개)"
         
     except Exception as e:
         import traceback
