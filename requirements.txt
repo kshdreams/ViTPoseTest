@@ -10,7 +10,7 @@ gradio==4.15.0
 gradio-client==0.8.1
 fastapi==0.104.1
 uvicorn==0.24.0
-pydantic==1.10.13
+pydantic>=2.0.0,<3.0.0
 
 # 컴퓨터 비전 및 이미지 처리
 opencv-python>=4.8.0
