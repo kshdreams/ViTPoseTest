@@ -397,11 +397,13 @@ def process_video(video_file, frame_interval=1, progress=None):
                         else:
                             # 사람이 검출되지 않으면 전체 이미지 사용
                             person_boxes = get_full_image_box(pil_image)
+                            adjusted_boxes = person_boxes  # adjusted_boxes도 설정
                             previous_box_areas = []  # 이전 면적 초기화
                             add_log(f"프레임 {frame_idx} 사람 미검출, 전체 이미지 사용")
                     else:
                         # 캐시된 사람 검출 결과 사용
                         person_boxes = cached_person_boxes
+                        adjusted_boxes = cached_person_boxes  # adjusted_boxes도 설정
                         add_log(f"프레임 {frame_idx} 캐시된 사람 검출 결과 사용: {len(person_boxes)}명")
                     
                     pose_results = extract_pose(pil_image, adjusted_boxes)
