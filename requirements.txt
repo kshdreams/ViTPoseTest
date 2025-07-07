@@ -5,9 +5,9 @@ torchvision>=0.15.0
 datasets>=2.0.0
 accelerate>=0.20.0
 
-# 웹 인터페이스 (Gradio 5.x)
-gradio>=5.35.0
-gradio-client>=1.10.4
+# 웹 인터페이스 (Gradio 4.x - 안정 버전)
+gradio>=4.44.0
+gradio-client>=1.0.0
 
 # 컴퓨터 비전 및 이미지 처리
 opencv-python>=4.8.0
@@ -29,7 +29,3 @@ imageio-ffmpeg>=0.4.8
 # 유틸리티
 tqdm>=4.64.0
 pyyaml>=6.0
-
-# 추가 의존성
-tempfile
-datetime 
