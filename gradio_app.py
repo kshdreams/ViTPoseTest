@@ -87,21 +87,21 @@ def get_video_info(video_path):
         
         # 정보 포맷팅
         info_text = f"""
-### 📹 비디오 정보
+### � 비디오 정보
 
-**📐 해상도**: {width} × {height} ({width * height:,} 픽셀)
+**� 해상도**: {width} × {height} ({width * height:,} 픽셀)
 
 **⏱️ 길이**: {duration} ({duration_seconds:.1f}초)
 
-**🎬 프레임**: {total_frames:,}개 프레임
+**� 프레임**: {total_frames:,}개 프레임
 
-**🎯 FPS**: {fps:.1f} fps
+**� FPS**: {fps:.1f} fps
 
-**💾 파일 크기**: {file_size_mb:.1f} MB
+**� 파일 크기**: {file_size_mb:.1f} MB
 
-**🎞️ 코덱**: {codec}
+**�️ 코덱**: {codec}
 
-**📊 비율**: {width/height:.2f}:1 ({'가로형' if width > height else '세로형' if height > width else '정사각형'})
+**� 비율**: {width/height:.2f}:1 ({'가로형' if width > height else '세로형' if height > width else '정사각형'})
         """
         
         return info_text
@@ -110,14 +110,14 @@ def get_video_info(video_path):
         return f"❌ 비디오 정보 추출 실패: {str(e)}"
 
 with gr.Blocks(title="VitPose Video Analysis", theme=gr.themes.Soft()) as demo:
-    gr.Markdown("# 🏃‍♂️ VitPose Video Pose Extractor")
+    gr.Markdown("# �‍♂️ VitPose Video Pose Extractor")
     gr.Markdown("### AI 기반 비디오 포즈 분석 및 키포인트 추출")
     
     # 메인 컨텐츠 영역
     with gr.Row():
         # 왼쪽 패널: 입력 및 제어
         with gr.Column(scale=1):
-            gr.Markdown("### 🤖 모델 선택")
+            gr.Markdown("### � 모델 선택")
             model_dropdown = gr.Dropdown(
                 choices=[
                     "yonigozlan/synthpose-vitpose-huge-hf (Huge)",
@@ -127,7 +127,7 @@ with gr.Blocks(title="VitPose Video Analysis", theme=gr.themes.Soft()) as demo:
                 label="포즈 추정 모델",
                 info="Huge: 더 정확하지만 느림, Base: 빠르지만 덜 정확"
             )
-            load_model_btn = gr.Button("🔄 모델 로드", variant="secondary", size="sm")
+            load_model_btn = gr.Button("� 모델 로드", variant="secondary", size="sm")
             model_status = gr.Textbox(
                 label="모델 상태", 
                 interactive=False, 
@@ -135,13 +135,13 @@ with gr.Blocks(title="VitPose Video Analysis", theme=gr.themes.Soft()) as demo:
                 lines=2
             )
             
-            gr.Markdown("### 📹 비디오 업로드")
+            gr.Markdown("### � 비디오 업로드")
             video_input = gr.Video(label="비디오 파일 선택", height=200)
             
             # 비디오 정보 표시
             video_info = gr.Markdown(
                 "비디오를 업로드하면 정보가 여기에 표시됩니다.",
-                label="📊 비디오 정보"
+                label="� 비디오 정보"
             )
             
             gr.Markdown("### ⚙️ 처리 설정")
@@ -160,7 +160,7 @@ with gr.Blocks(title="VitPose Video Analysis", theme=gr.themes.Soft()) as demo:
             )
             
             gr.Markdown("### ⚙️ 제어")
-            extract_btn = gr.Button("🚀 포즈 추출 시작", variant="primary", size="lg")
+            extract_btn = gr.Button("� 포즈 추출 시작", variant="primary", size="lg")
             status_text = gr.Textbox(
                 label="상태", 
                 interactive=False, 
@@ -182,15 +182,15 @@ with gr.Blocks(title="VitPose Video Analysis", theme=gr.themes.Soft()) as demo:
         outputs=[video_info]
     )
     
-    gr.Markdown("### 📊 다운로드")
+    gr.Markdown("### � 다운로드")
     with gr.Row():
-        json_output = gr.File(label="📄 JSON", scale=1)
-        csv_output = gr.File(label="📊 CSV", scale=1)
-        skeleton_video_output = gr.File(label="🎬 스켈레톤 비디오", scale=1)
+        json_output = gr.File(label="� JSON", scale=1)
+        csv_output = gr.File(label="� CSV", scale=1)
+        skeleton_video_output = gr.File(label="� 스켈레톤 비디오", scale=1)
         
         # 오른쪽 패널: 결과 표시
         with gr.Column(scale=1):
-            gr.Markdown("### 📊 처리 결과")
+            gr.Markdown("### � 처리 결과")
             status_text = gr.Textbox(
                 label="상태", 
                 interactive=False, 
@@ -202,7 +202,7 @@ with gr.Blocks(title="VitPose Video Analysis", theme=gr.themes.Soft()) as demo:
     with gr.Row():
         # 로그 섹션
         with gr.Column(scale=1):
-            gr.Markdown("### 📋 실시간 로그")
+            gr.Markdown("### � 실시간 로그")
             log_display = gr.Textbox(
                 label="처리 로그", 
                 interactive=False, 
@@ -211,19 +211,18 @@ with gr.Blocks(title="VitPose Video Analysis", theme=gr.themes.Soft()) as demo:
                 value="로그가 여기에 표시됩니다..."
             )
             with gr.Row():
-                refresh_btn = gr.Button("🔄 새로고침", size="sm", variant="secondary")
-                clear_btn = gr.Button("🗑️ 초기화", size="sm", variant="secondary")
+                refresh_btn = gr.Button("� 새로고침", size="sm", variant="secondary")
+                clear_btn = gr.Button("�️ 초기화", size="sm", variant="secondary")
         
         # JSON 뷰어 섹션
         with gr.Column(scale=1):
-            gr.Markdown("### 📊 현재 시점 포즈 데이터")
+            gr.Markdown("### � 현재 시점 포즈 데이터")
             json_viewer = gr.JSON(
-                label="선택된 시점의 포즈 데이터",
-                height=300
+                label="선택된 시점의 포즈 데이터"
             )
             with gr.Row():
-                expand_btn = gr.Button("📖 전체보기", size="sm", variant="secondary")
-                collapse_btn = gr.Button("📕 축소", size="sm", variant="secondary")
+                expand_btn = gr.Button("� 전체보기", size="sm", variant="secondary")
+                collapse_btn = gr.Button("� 축소", size="sm", variant="secondary")
     
 
     
