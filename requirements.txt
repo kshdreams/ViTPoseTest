@@ -5,15 +5,18 @@ torchvision>=0.15.0
 datasets>=2.0.0
 accelerate>=0.20.0
 
-# 웹 인터페이스 (Gradio 4.x - 안정 버전)
-gradio>=4.44.0
-gradio-client>=1.0.0
+# 웹 인터페이스 (안정적인 버전 조합)
+gradio==4.15.0
+gradio-client==0.8.1
+fastapi==0.104.1
+uvicorn==0.24.0
+pydantic==1.10.13
 
 # 컴퓨터 비전 및 이미지 처리
 opencv-python>=4.8.0
 opencv-contrib-python>=4.8.0
 Pillow>=8.0.0
-numpy>=1.21.0
+numpy>=1.21.0,<2.0.0
 
 # 데이터 처리 및 분석
 pandas>=1.3.0
